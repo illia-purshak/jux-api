@@ -1,0 +1,64 @@
+# Local development infrastructure. Values come from `.env` (template: `.env.example`).
+#
+#   docker compose up -d                    # DB only
+#   docker compose --profile tools up -d    # DB + pgAdmin
+#   docker compose down                     # stop (data stays in the volume)
+#   docker compose down -v                  # stop and delete data
+#
+# Container/volume/network names are prefixed with COMPOSE_PROJECT_NAME from `.env`,
+# so several projects created from this template don't clash.
+
+services:
+  db:
+    image: docker.io/library/postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DATABASE:?set POSTGRES_DATABASE in .env}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - backend
+    healthcheck:
+      # $$ — variables are resolved inside the container, not by compose.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: docker.io/dpage/pgadmin4:latest
+    profiles: [tools]
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_LOGIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_LOGIN_PASSWORD:-admin}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "${PGADMIN_PORT:-8083}:80"
+    networks:
+      - backend
+
+  # Extra services when needed — uncomment and add the variables to .env.example.
+  # redis:
+  #   image: docker.io/library/redis:7-alpine
+  #   restart: unless-stopped
+  #   ports:
+  #     - '${REDIS_PORT:-6379}:6379'
+  #   networks:
+  #     - backend
+
+volumes:
+  db_data:
+  pgadmin_data:
+
+networks:
+  backend:
+    driver: bridge

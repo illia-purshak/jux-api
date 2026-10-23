@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2023",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictPropertyInitialization": false,
+    "types": ["vitest/globals", "node"],
+    "paths": {
+      "@app/*": ["./src/app/*", "./src/app/*/index.ts"],
+      "@common/*": ["./src/common/*", "./src/common/*/index.ts"],
+      "@constants/*": [
+        "./src/common/constants/*",
+        "./src/common/constants/*/index.ts"
+      ],
+      "@dto/*": ["./src/common/dto/*", "./src/common/dto/*/index.ts"],
+      "@utils/*": ["./src/common/utils/*", "./src/common/utils/*/index.ts"],
+      "@entities/*": ["./src/entities/*", "./src/entities/*/index.ts"],
+      "@modules/*": ["./src/modules/*", "./src/modules/*/index.ts"]
+    }
+  }
+}

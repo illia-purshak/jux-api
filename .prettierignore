@@ -1,0 +1,12 @@
+dist
+coverage
+node_modules
+pnpm-lock.yaml
+
+# TS/JS are formatted by ESLint Stylistic (eslint.config.mjs), which leaves quotes alone
+*.ts
+*.mts
+*.cts
+*.js
+*.mjs
+*.cjs
