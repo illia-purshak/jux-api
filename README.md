@@ -1,105 +1,22 @@
-# template-api
+# jux-api
 
-Starter template for REST APIs.
+REST API for Jux.
 
 **Stack:** NestJS 12 · TypeScript (ESM) · Swagger (OpenAPI) · TypeORM · PostgreSQL · class-validator · Vitest · ESLint (+ Stylistic) · Prettier · pnpm · Docker/Podman Compose
 
-## Getting started from this template
-
-Follow these steps once, right after cloning.
-
-### 1. Clone without the template history
+## Getting started
 
 ```bash
-git clone <template-repo-url> my-api
-cd my-api
-rm -rf .git && git init
-```
-
-(Or use **Use this template** on GitHub.)
-
-### 2. Rename the project
-
-- `package.json`: set `name`, `description` and `author`.
-- `.env.example`: set `COMPOSE_PROJECT_NAME` and `POSTGRES_DATABASE` to your project name.
-- `src/common/constants/app.constants.ts`: change `API_PREFIX` if `api/v1` doesn't fit.
-- This README: replace this section with a description of your project.
-
-### 3. Environment
-
-```bash
-cp .env.example .env
-```
-
-Fill in `.env`. It is git-ignored; `.env.example` is the committed list of all variables, so keep it in sync whenever you add a new one.
-
-`.env` is loaded by `ConfigModule` (in `AppModule`) on startup; variables exported in the shell take precedence.
-
-### 4. Install and start the database
-
-```bash
+cp .env.example .env                   # then fill in .env
 pnpm install
 docker compose up -d                   # Postgres
 docker compose --profile tools up -d   # Postgres + pgAdmin (http://localhost:8083)
+pnpm run start:dev                     # API: http://localhost:<PORT>/api/v1, Swagger UI: http://localhost:<PORT>/docs
 ```
 
 With Podman, use `podman-compose` with the same arguments.
 
-### 5. Connect the app to the database
-
-This step is not done in the template, so that the template doesn't force a DB driver. `@nestjs/config` is already set up.
-
-```bash
-pnpm add pg
-```
-
-`src/app/app.module.ts`:
-
-```ts
-import { ConfigModule, ConfigService } from "@nestjs/config"; // already imported
-import { TypeOrmModule } from "@nestjs/typeorm";
-
-@Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }), // already there
-    TypeOrmModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: "postgres",
-        host: config.getOrThrow("POSTGRES_HOST"),
-        port: Number(config.getOrThrow("POSTGRES_PORT")),
-        username: config.getOrThrow("POSTGRES_USER"),
-        password: config.getOrThrow("POSTGRES_PASSWORD"),
-        database: config.getOrThrow("POSTGRES_DATABASE"),
-        autoLoadEntities: true,
-        synchronize: false, // use migrations; `true` only for quick local prototyping
-      }),
-    }),
-    // feature modules
-  ],
-  // ...
-})
-export class AppModule {}
-```
-
-> **TypeORM 1.x:** `undefined`/`null` values in `where` throw by default (`invalidWhereValuesBehavior`). Add optional filters to `where` only when they are set, as `ExampleService.findAll` does.
-
-### 6. Create your first module
-
-Use the `example` module as the reference:
-
-1. Copy `src/modules/example` to `src/modules/<name>` and `src/entities/example.entity.ts` to `src/entities/<name>.entity.ts`.
-2. Rename `Example`/`example` to your name in all of them, including the route in `@Controller('...')` and the table in `@Entity('...')`.
-3. Add the module to `imports` in `AppModule`.
-4. Delete the `example` module and entity when you no longer need them as a reference.
-
-### 7. Check that everything works
-
-```bash
-pnpm run start:dev   # API: http://localhost:<PORT>/api/v1, Swagger UI: http://localhost:<PORT>/docs
-pnpm run lint
-pnpm run test
-```
+`.env` is git-ignored and loaded by `ConfigModule` (in `AppModule`) on startup; variables exported in the shell take precedence. `.env.example` is the committed list of all variables, so keep it in sync whenever you add a new one.
 
 ## Project structure
 
@@ -116,23 +33,24 @@ src/
 │       └── transformers/   # class-transformer helpers for DTOs, grouped by result type
 ├── entities/               # TypeORM entities, one per file: <name>.entity.ts
 └── modules/
-    └── example/            # reference feature module (controller → service → repository)
-        ├── dto/
-        ├── example.controller.ts
-        ├── example.module.ts
-        └── example.service.ts
+    └── room/               # feature module (controller → service → repository)
+        ├── room.controller.ts
+        ├── room.dto.ts
+        ├── room.module.ts
+        └── room.service.ts
 test/                       # e2e tests
 ```
 
-Each template file starts with a comment describing what belongs in its folder.
+Shared files start with a comment describing what belongs in their folder.
 
 ## Conventions
 
 - **Controller:** HTTP only (routes, params, status codes); no business logic.
 - **Service:** business logic and DB access.
 - **DTO:** every body and query is described by a DTO with class-validator decorators. The global `ValidationPipe` rejects unknown fields (`forbidNonWhitelisted`) and converts types (`transform`).
-- **Imports:** the project is ESM, so imports need the `.js` extension (`'./example.service.js'`). Use aliases for anything outside the current folder (see below), relative `./` imports inside it.
+- **Imports:** the project is ESM, so imports need the `.js` extension (`'./room.service.js'`). Use aliases for anything outside the current folder (see below), relative `./` imports inside it.
 - **Secrets:** environment variables only, never constants.
+- **TypeORM 1.x:** `undefined`/`null` values in `where` throw by default (`invalidWhereValuesBehavior`). Add optional filters to `where` only when they are set.
 
 ## Path aliases
 
@@ -149,7 +67,7 @@ Defined in `tsconfig.json` (`paths`):
 | `@modules/*`   | `src/modules/*`          |
 
 ```ts
-import { ExampleEntity } from "@entities/example.entity.js"; // file: keep `.js`
+import { Room } from "@entities/room.entity.js"; // file: keep `.js`
 import { ToStringArray } from "@utils/transformers"; // folder with index.ts: no extension
 ```
 
@@ -210,7 +128,7 @@ The plugin works only with `nest build` / `nest start`. Dynamic DTO factories (`
 `src/common/dto/query.dto.ts` builds a query DTO from an allow-list:
 
 ```ts
-export class ExampleQueryDto extends DefaultQueryParamsDto({
+export class QueryListRoomDto extends DefaultQueryParamsDto({
   sortFields: ["createdAt", "name"],
   searchFields: ["name", "description"],
   defaultSortBy: "createdAt",
@@ -235,14 +153,14 @@ export class ExampleQueryDto extends DefaultQueryParamsDto({
 `ResponseBodyControlParamsDto` contains only `include`/`fields` and is meant for single-item endpoints (`GET /:id`), where pagination/sorting/search make no sense:
 
 ```ts
-export class ExampleSingleQueryDto extends ResponseBodyControlParamsDto({
+export class QueryRoomDto extends ResponseBodyControlParamsDto({
   fields: ["id", "name"],
 }) {}
 ```
 
 `DefaultQueryParamsDto` is built from the list params plus `ResponseBodyControlParamsDto` using `IntersectionType`, so both share the same `include`/`fields` behaviour.
 
-List responses use `ResponseListDto<T>` (`{ meta, items }`) from `src/common/dto/meta.dto.ts`. For a full example, see `ExampleService.findAll`.
+List responses use `ResponseListDto<T>` (`{ meta, items }`) from `src/common/dto/meta.dto.ts`.
 
 ## Scripts
 

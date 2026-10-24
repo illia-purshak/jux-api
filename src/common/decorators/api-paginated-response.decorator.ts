@@ -11,7 +11,7 @@ import { ResponseListDto } from "@dto/meta.dto.js";
  * Documents a paginated list response in Swagger: `{ meta: MetaDto, items: Model[] }`.
  * Needed because Swagger can't describe the generic `ResponseListDto<T>` on its own.
  *
- * Usage: `@ApiPaginatedResponse(ExampleEntity) @Get() findAll() {...}`
+ * Usage: `@ApiPaginatedResponse(Room) @Get() findAll() {...}`
  */
 export function ApiPaginatedResponse(model: Type<unknown>) {
   return applyDecorators(
