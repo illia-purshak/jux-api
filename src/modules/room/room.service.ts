@@ -1,9 +1,10 @@
 import { Room } from "@entities/room.entity.js";
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Brackets, Repository } from "typeorm";
+import { Brackets, In, Repository } from "typeorm";
 import {
   DEFAULT_SORTING_FIELD,
+  DEFAULT_SORTING_ORDER,
   QueryListRoomDto,
   QueryRoomDto,
   ROOM_RESPONSE_FIELDS,
@@ -14,8 +15,8 @@ import {
   PAGE_NUMBER_DEFAULT,
   PAGE_SIZE_DEFAULT,
 } from "@common/constants/pagination.constants.js";
-import { SortOrder } from "@common/dto/query.dto.js";
 import { escapeLike } from "@common/utils/like.helper.js";
+import { toRangeFilter } from "@common/utils/range.helper.js";
 
 @Injectable()
 export class RoomService {
@@ -46,9 +47,10 @@ export class RoomService {
       search,
       searchField,
       sortBy = DEFAULT_SORTING_FIELD,
-      sortOrder = SortOrder.DESC,
+      sortOrder = DEFAULT_SORTING_ORDER,
       page = PAGE_NUMBER_DEFAULT,
       pageSize = PAGE_SIZE_DEFAULT,
+      ...filters
     } = query;
 
     const queryBuilder = this.roomRepository
@@ -74,6 +76,17 @@ export class RoomService {
         { search: `%${escapeLike(search)}%` },
       );
     }
+
+    if (filters.id?.length) queryBuilder.andWhere({ id: In(filters.id) });
+    if (filters.name?.length) queryBuilder.andWhere({ name: In(filters.name) });
+
+    if (filters.accessBy) queryBuilder.andWhere({ accessBy: filters.accessBy });
+
+    const updatedAt = toRangeFilter({ type: 'date', from: filters.updatedAtFrom, to: filters.updatedAtTo });
+    const createdAt = toRangeFilter({ type: 'date', from: filters.createdAtFrom, to: filters.createdAtTo });
+
+    if (updatedAt) queryBuilder.andWhere({ updatedAt });
+    if (createdAt) queryBuilder.andWhere({ createdAt });
 
     const [rooms, totalItems] = await queryBuilder.getManyAndCount();
 
