@@ -7,6 +7,7 @@ export const ROOM_RESPONSE_FIELDS = ['id', 'name', 'accessBy', 'updatedAt', 'cre
 export const ROOM_SORT_FIELDS = ['id', 'name', 'accessBy', 'updatedAt', 'createdAt'];
 export const ROOM_SEARCH_FIELDS = ['id', 'name', 'accessBy', 'updatedAt', 'createdAt'];
 export const DEFAULT_SORTING_FIELD = 'createdAt';
+export const DEFAULT_SORTING_ORDER = 'DESC';
 
 export class RoomDto {
   @IsInt()
@@ -34,6 +35,7 @@ export class QueryListRoomDto extends DefaultQueryParamsDto({
   sortFields: ROOM_SORT_FIELDS,
   searchFields: ROOM_SEARCH_FIELDS,
   defaultSortBy: DEFAULT_SORTING_FIELD,
+  fields: ROOM_RESPONSE_FIELDS,
 }) {}
 
 export class QueryRoomDto extends ResponseBodyControlParamsDto({

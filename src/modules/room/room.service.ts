@@ -1,30 +1,92 @@
-import { Room } from '@entities/room.entity.js';
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { QueryRoomDto, ROOM_RESPONSE_FIELDS } from './room.dto.js';
+import { Room } from "@entities/room.entity.js";
+import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Brackets, Repository } from "typeorm";
+import {
+  DEFAULT_SORTING_FIELD,
+  QueryListRoomDto,
+  QueryRoomDto,
+  ROOM_RESPONSE_FIELDS,
+  ROOM_SEARCH_FIELDS,
+} from "./room.dto.js";
+import { ResponseListDto } from "@common/dto/meta.dto.js";
+import {
+  PAGE_NUMBER_DEFAULT,
+  PAGE_SIZE_DEFAULT,
+} from "@common/constants/pagination.constants.js";
+import { SortOrder } from "@common/dto/query.dto.js";
+import { escapeLike } from "@common/utils/like.helper.js";
 
 @Injectable()
 export class RoomService {
   constructor(
     @InjectRepository(Room)
     private readonly roomRepository: Repository<Room>,
-  ) { }
+  ) {}
 
   async findOne(id: number, query: QueryRoomDto): Promise<Room | null> {
     const { fields } = query;
 
-    // TODO: Its not safe to let user know the actual fiedls names, even whitelisted ones. Is it?
-    // Maybe Mapper would solve this issue?
-    const select = fields?.filter((field) =>
-      ROOM_RESPONSE_FIELDS.includes(field),
-    ).map((field) => `rm.${field}`);
-
-    const queryBuilder = this.roomRepository.createQueryBuilder('rm')
+    const queryBuilder = this.roomRepository
+      .createQueryBuilder("rm")
       .andWhere({ id });
+
+    const select = fields
+      ?.filter((field) => ROOM_RESPONSE_FIELDS.includes(field))
+      .map((field) => `rm.${field}`);
 
     if (select?.length) queryBuilder.select(select);
 
     return await queryBuilder.getOne();
+  }
+
+  async findAll(query: QueryListRoomDto): Promise<ResponseListDto<Room>> {
+    const {
+      fields,
+      search,
+      searchField,
+      sortBy = DEFAULT_SORTING_FIELD,
+      sortOrder = SortOrder.DESC,
+      page = PAGE_NUMBER_DEFAULT,
+      pageSize = PAGE_SIZE_DEFAULT,
+    } = query;
+
+    const queryBuilder = this.roomRepository
+      .createQueryBuilder("rm")
+      .orderBy(`rm.${sortBy}`, sortOrder)
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
+
+    const select = fields
+      ?.filter((field) => ROOM_RESPONSE_FIELDS.includes(field))
+      .map((field) => `rm.${field}`);
+
+    if (select?.length) queryBuilder.select(select);
+
+    if (search) {
+      const searchFields = searchField ? [searchField] : ROOM_SEARCH_FIELDS;
+      queryBuilder.andWhere(
+        new Brackets((qb) => {
+          for (const field of searchFields) {
+            qb.orWhere(`CAST(rm.${field} AS TEXT) ILIKE :search`);
+          }
+        }),
+        { search: `%${escapeLike(search)}%` },
+      );
+    }
+
+    const [rooms, totalItems] = await queryBuilder.getManyAndCount();
+
+    return {
+      items: rooms,
+      meta: {
+        pageSize,
+        totalItems,
+        totalPages: Math.ceil(totalItems / pageSize),
+        currentPage: page,
+        hasNextPage: page * pageSize < totalItems,
+        hasPrevPage: page > 1,
+      },
+    };
   }
 }
