@@ -7,7 +7,7 @@
  *    so class-validator rejects them with a regular 400 (no throwing, no silent defaults);
  *  - pair each transformer with a validator (`@IsArray()`, `@IsInt({ each: true })`, ...).
  *
- * Import from `@utils/transformers`.
+ * Import from `@common/decorators`.
  */
 
 export * from "./array.transformers.js";
