@@ -1,4 +1,5 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn, type Relation, UpdateDateColumn } from "typeorm";
+import { User } from "./users.entity.js";
 
 export enum RoomAccessByEnum {
   public = 'public',
@@ -15,7 +16,7 @@ export class Room {
   @Column({ type: 'varchar', length: 255 })
   public name: string;
 
-  @Column({ enum: RoomAccessByEnum })
+  @Column({ enum: RoomAccessByEnum, default: 'public' })
   public accessBy: RoomAccessByEnum;
 
   @UpdateDateColumn()
@@ -23,4 +24,7 @@ export class Room {
 
   @CreateDateColumn()
   public createdAt: Date;
+
+  @ManyToOne(() => User, (user) => user.id)
+  user: Relation<User>;
 }

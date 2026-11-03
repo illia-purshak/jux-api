@@ -1,14 +1,16 @@
 import { Room } from "@entities/room.entity.js";
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Brackets, In, Repository } from "typeorm";
 import {
+  CreateRoomDto,
   DEFAULT_SORTING_FIELD,
   DEFAULT_SORTING_ORDER,
   QueryListRoomDto,
   QueryRoomDto,
   ROOM_RESPONSE_FIELDS,
   ROOM_SEARCH_FIELDS,
+  UpdateRoomDto,
 } from "./room.dto.js";
 import { ResponseListDto } from "@common/dto/meta.dto.js";
 import {
@@ -17,12 +19,15 @@ import {
 } from "@common/constants/pagination.constants.js";
 import { escapeLike } from "@common/utils/like.helper.js";
 import { toRangeFilter } from "@common/utils/range.helper.js";
+import { User } from "@entities/users.entity.js";
 
 @Injectable()
 export class RoomService {
   constructor(
     @InjectRepository(Room)
     private readonly roomRepository: Repository<Room>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async findOne(id: number, query: QueryRoomDto): Promise<Room | null> {
@@ -101,5 +106,32 @@ export class RoomService {
         hasPrevPage: page > 1,
       },
     };
+  }
+
+  async create(dto: CreateRoomDto, userId: number): Promise<Room> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) throw new NotFoundException();
+
+    const room = this.roomRepository.create({ ...dto, user });
+    return await this.roomRepository.save(room);
+  }
+
+  async update(dto: UpdateRoomDto, userId: number, roomId: number): Promise<Room> {
+    const oldRoom = await this.roomRepository.findOne({ where: { id: roomId, user: { id: userId } } });
+
+    if (!oldRoom) throw new NotFoundException();
+
+    const room = this.roomRepository.merge(oldRoom, dto);
+
+    return await this.roomRepository.save(room);
+  }
+
+  async delete(userId: number, roomId: number): Promise<Room> {
+    const oldRoom = await this.roomRepository.findOne({ where: { id: roomId, user: { id: userId } } });
+
+    if (!oldRoom) throw new NotFoundException();
+
+    return await this.roomRepository.remove(oldRoom);
   }
 }

@@ -1,6 +1,6 @@
 import { DefaultQueryParamsDto, ResponseBodyControlParamsDto, SortOrder } from "@common/dto/query.dto.js";
-import { ToNumberArray, ToStringArray } from "@common/utils/transformers/array.transformers.js";
-import { ToEndOfDay } from "@common/utils/transformers/date.transformers.js";
+import { ToNumberArray, ToStringArray } from "@common/decorators/array.transformers.js";
+import { ToEndOfDay } from "@common/decorators/date.transformers.js";
 import { RoomAccessByEnum } from "@entities/room.entity.js";
 import { ApiPropertyOptional, OmitType, PartialType } from "@nestjs/swagger";
 import { Type } from "class-transformer";

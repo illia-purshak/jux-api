@@ -23,7 +23,7 @@ import {
   PAGE_SIZE_DEFAULT,
   PAGE_SIZE_MAX,
 } from "@constants/pagination.constants.js";
-import { ToStringArray } from "@utils/transformers";
+import { ToStringArray } from "@common/decorators";
 
 export enum SortOrder {
   ASC = "ASC",
