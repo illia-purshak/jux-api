@@ -68,7 +68,7 @@ Defined in `tsconfig.json` (`paths`):
 
 ```ts
 import { Room } from "@entities/room.entity.js"; // file: keep `.js`
-import { ToStringArray } from "@utils/transformers"; // folder with index.ts: no extension
+import { ToStringArray } from "@common/decorators"; // folder with index.ts: no extension
 ```
 
 - `nest build` / `nest start` rewrite aliases into relative paths in `dist/`; Vitest resolves them via `resolve.tsconfigPaths`. Running compiled code any other way (e.g. `tsc` + `node`) won't resolve them.
@@ -90,7 +90,7 @@ import { ToStringArray } from "@utils/transformers"; // folder with index.ts: no
 
 ## Transformers
 
-`@utils/transformers`: class-transformer decorators for DTO fields, mostly query params (they always arrive as strings).
+`@common/decorators`: class-transformer decorators for DTO fields, mostly query params (they always arrive as strings).
 
 | Decorator          | Result                 | Example                                              |
 | ------------------ | ---------------------- | ---------------------------------------------------- |

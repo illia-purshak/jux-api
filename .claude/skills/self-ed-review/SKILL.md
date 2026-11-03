@@ -43,7 +43,7 @@ For each finding give:
 - **Where**: file / function / line.
 - **What happens**: the concrete failing scenario, as an input → wrong outcome ("`?page=0` → negative offset → DB error returned as 500").
 - **Why it matters**: one sentence.
-- **Direction**: what the correct behavior should be, in words. No code, no exact method names from their framework unless the name itself is the concept (e.g. "a transaction" is fine; "call `queryRunner.startTransaction()`" is not). If the project already has a helper, transformer or validator that solves this, point to where it lives ("there's a ready-made transformer for this in `@utils/transformers`") without naming the exact call.
+- **Direction**: what the correct behavior should be, in words. No code, no exact method names from their framework unless the name itself is the concept (e.g. "a transaction" is fine; "call `queryRunner.startTransaction()`" is not). If the project already has a helper, transformer or validator that solves this, point to where it lives ("there's a ready-made transformer for this in `@common/decorators`") without naming the exact call.
 
 If a second problem lives in the same place (e.g. a related bug that would remain after the main fix), add it as a sub-item of that finding instead of a separate number.
 
