@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn, type Relation, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn, type Relation, Unique, UpdateDateColumn } from "typeorm";
 import { UserCredentails } from "./userCredentials.entity.js";
 import { Room } from "./room.entity.js";
 
@@ -7,10 +7,10 @@ export class User {
   @PrimaryGeneratedColumn()
   public id: number;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, unique: true })
   public name?: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, unique: true })
   public email?: string;
 
   @UpdateDateColumn()
