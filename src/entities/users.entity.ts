@@ -20,8 +20,7 @@ export class User {
   public createdAt: Date;
 
   @OneToOne(() => UserCredentails, (credentials) => credentials.user, { cascade: true })
-  @JoinColumn()
-  userCredentails: Relation<UserCredentails>;
+  credentials: Relation<UserCredentails>;
 
   @OneToMany(() => Room, (room) => room.user, { cascade: true })
   room: Relation<Room>;
