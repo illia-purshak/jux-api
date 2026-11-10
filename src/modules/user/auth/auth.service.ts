@@ -80,22 +80,25 @@ export class AuthService {
 
     const token = sha256(dto.refreshToken);
 
-    const record = await this.userRepository.findOne({ where: {
-      credentials: {
-        refreshTokenHash: token,
-        refreshExpiresAt: MoreThanOrEqual(new Date()),
-      },
+    const { accessToken, refreshToken } = await this.dataSourse.transaction(async (manager) => {
+      const user = await manager.findOne(User, {
+        where: {
+          credentials: {
+            refreshTokenHash: token,
+            refreshExpiresAt: MoreThanOrEqual(new Date()),
+          },
+        }, relations: { credentials: true },
+      });
 
-    }, relations: { credentials: true } });
+      if (!user) throw new UnauthorizedException(AUTH_ERRORS.INVALID_REFRESH_TOKEN);
 
-    if (!record) {
-      throw new UnauthorizedException(AUTH_ERRORS.INVALID_REFRESH_TOKEN);
-    }
+      const { accessToken, refreshToken } = await this.generateAuthTokens(user);
 
-    const { accessToken, refreshToken } = await this.generateAuthTokens(record);
+      return { accessToken, refreshToken };
+    });
 
     return { accessToken, refreshToken };
-  }
+  };
 
   async logout(refreshToken?: string) {
     if (!refreshToken) return;
