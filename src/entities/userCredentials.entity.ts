@@ -1,29 +1,28 @@
-import { Column, CreateDateColumn, Entity, OneToOne, PrimaryGeneratedColumn, type Relation, UpdateDateColumn } from "typeorm";
+import { Column, Entity, Index, JoinColumn, OneToOne, PrimaryColumn, type Relation } from "typeorm";
 import { User } from "./users.entity.js";
+import { Exclude } from "class-transformer";
 
 @Entity('user_credentails')
 export class UserCredentails {
-  @PrimaryGeneratedColumn()
-  public id: number;
+  @PrimaryColumn()
+  public userId: number;
 
-  @Column({ nullable: true })
+  @Exclude({ toPlainOnly: true })
+  @Column({ nullable: true, length: 64, type: 'varchar', select: false })
   public passwordHash?: string;
 
   @Column({ nullable: true })
   public passUpdatedAt?: Date;
 
-  @Column()
-  public refreshToken: string;
+  @Exclude({ toPlainOnly: true })
+  @Index({ where: '"refreshTokenHash" IS NOT NULL' })
+  @Column({ nullable: true, type: 'varchar', select: false })
+  public refreshTokenHash: string | null;
 
-  @Column()
-  public accessToken: string;
+  @Column({ nullable: true, type: 'timestamp' })
+  public refreshExpiresAt: Date | null;
 
-  @UpdateDateColumn()
-  public updatedAt: Date;
-
-  @CreateDateColumn()
-  public createdAt: Date;
-
-  @OneToOne(() => User, (user) => user.userCredentails)
+  @OneToOne(() => User, (user) => user.credentials)
+  @JoinColumn({ name: 'userId' })
   user: Relation<User>;
 }

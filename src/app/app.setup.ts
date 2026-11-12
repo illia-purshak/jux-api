@@ -19,7 +19,8 @@ export function configureApp<T extends INestApplication>(app: T): T {
   app.setGlobalPrefix(API_PREFIX);
   app.enableCors({
     // `CORS_ORIGIN=http://a.com, http://b.com` → ["http://a.com", "http://b.com"]; unset → any origin.
-    origin: parseList(process.env.CORS_ORIGIN) ?? "*",
+    credentials: true,
+    origin: parseList(process.env.CORS_ORIGIN) ?? [],
     methods: CORS_METHODS,
     allowedHeaders: CORS_ALLOWED_HEADERS,
   });
