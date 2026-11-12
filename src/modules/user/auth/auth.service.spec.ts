@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
 import { QueryFailedError, type DataSource, type EntityManager, type Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -17,6 +17,13 @@ vi.mock('bcrypt', () => ({
 describe('AuthService', () => {
   const jwtService = { sign: vi.fn() };
   const userRepository = { findOne: vi.fn() };
+  const queryBuilder = {
+    update: vi.fn().mockReturnThis(),
+    set: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    andWhere: vi.fn().mockReturnThis(),
+    execute: vi.fn(),
+  };
   const userCredRepository = {
     findOne: vi.fn(),
     update: vi.fn(),
@@ -26,8 +33,10 @@ describe('AuthService', () => {
     findOne: vi.fn(),
     create: vi.fn(),
     save: vi.fn(),
+    createQueryBuilder: vi.fn(() => queryBuilder),
   };
   const dataSource = {
+    manager: mockManager,
     transaction: vi.fn(
       async <T>(callback: (manager: EntityManager) => Promise<T>): Promise<T> => {
         return callback(mockManager as unknown as EntityManager);
@@ -39,6 +48,7 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    queryBuilder.execute.mockResolvedValue({ affected: 1 });
 
     service = new AuthService(
       jwtService as unknown as JwtService,
@@ -53,7 +63,7 @@ describe('AuthService', () => {
     const user = { id: 1, credentials: { passwordHash: 'hashed' } };
 
     it('returns tokens and saves refresh token hash when credentials are valid', async () => {
-      userRepository.findOne.mockResolvedValue(user);
+      mockManager.findOne.mockResolvedValue(user);
       vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
       jwtService.sign.mockReturnValue('access-token');
 
@@ -63,26 +73,49 @@ describe('AuthService', () => {
         accessToken: 'access-token',
         refreshToken: expect.any(String),
       });
+      // passwordHash is `select: false`, so it must be requested explicitly.
+      expect(mockManager.findOne).toHaveBeenCalledWith(User, expect.objectContaining({
+        select: { id: true, credentials: { passwordHash: true } },
+      }));
       expect(bcrypt.compare).toHaveBeenCalledWith('secret', 'hashed');
       expect(jwtService.sign).toHaveBeenCalledWith({ sub: 1 });
-      expect(userCredRepository.update).toHaveBeenCalledWith(
-        { userId: 1 },
-        {
-          refreshTokenHash: expect.any(String),
-          refreshExpiresAt: expect.any(Date),
-        },
+      expect(mockManager.createQueryBuilder).toHaveBeenCalled();
+      expect(queryBuilder.set).toHaveBeenCalledWith({
+        refreshTokenHash: sha256(result.refreshToken),
+        refreshExpiresAt: expect.any(Date),
+      });
+      expect(queryBuilder.where).toHaveBeenCalledWith({ userId: 1 });
+      expect(queryBuilder.andWhere).not.toHaveBeenCalled();
+    });
+
+    it('throws UnauthorizedException when passwordHash is not loaded', async () => {
+      mockManager.findOne.mockResolvedValue({ id: 1, credentials: {} });
+
+      await expect(service.login(dto)).rejects.toThrow(
+        new UnauthorizedException(AUTH_ERRORS.INVALID_CREDENTIALS),
       );
+      expect(bcrypt.compare).not.toHaveBeenCalled();
     });
 
     it('throws UnauthorizedException when password is wrong', async () => {
-      userRepository.findOne.mockResolvedValue(user);
+      mockManager.findOne.mockResolvedValue(user);
       vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
 
       await expect(service.login(dto)).rejects.toThrow(
         new UnauthorizedException(AUTH_ERRORS.INVALID_CREDENTIALS),
       );
       expect(jwtService.sign).not.toHaveBeenCalled();
-      expect(userCredRepository.update).not.toHaveBeenCalled();
+      expect(queryBuilder.execute).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when user has no credentials row', async () => {
+      mockManager.findOne.mockResolvedValue(user);
+      vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+      queryBuilder.execute.mockResolvedValue({ affected: 0 });
+
+      await expect(service.login(dto)).rejects.toThrow(
+        new NotFoundException(AUTH_ERRORS.CREDENTIALS_NOT_FOUND),
+      );
     });
   });
 
@@ -113,13 +146,27 @@ describe('AuthService', () => {
       });
       expect(mockManager.save).toHaveBeenCalledWith(User, user);
       expect(jwtService.sign).toHaveBeenCalledWith({ sub: 1 });
-      expect(userCredRepository.update).toHaveBeenCalledWith(
-        { userId: 1 },
-        {
-          refreshTokenHash: expect.any(String),
-          refreshExpiresAt: expect.any(Date),
-        },
-      );
+      expect(mockManager.createQueryBuilder).toHaveBeenCalled();
+      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+      expect(queryBuilder.set).toHaveBeenCalledWith({
+        refreshTokenHash: sha256(result.refreshToken),
+        refreshExpiresAt: expect.any(Date),
+      });
+      expect(queryBuilder.where).toHaveBeenCalledWith({ userId: 1 });
+    });
+
+    it('throws InternalServerErrorException when user is created but tokens are not saved', async () => {
+      mockManager.findOne.mockResolvedValue(null);
+      vi.mocked(bcrypt.hash).mockResolvedValue('hashed' as never);
+      mockManager.create.mockReturnValue(user);
+      mockManager.save.mockResolvedValue(user);
+      queryBuilder.execute.mockRejectedValue(new Error('connection lost'));
+
+      const error = await service.register(dto).catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(InternalServerErrorException);
+      expect((error as InternalServerErrorException).message).toBe(AUTH_ERRORS.REGISTERED_BUT_LOGIN_FAILED);
+      expect(mockManager.save).toHaveBeenCalledWith(User, user);
     });
 
     it('throws ConflictException when such email or name already taken', async () => {
@@ -151,7 +198,7 @@ describe('AuthService', () => {
       });
 
       expect(jwtService.sign).not.toHaveBeenCalled();
-      expect(userCredRepository.update).not.toHaveBeenCalled();
+      expect(queryBuilder.execute).not.toHaveBeenCalled();
     });
 
     it('rethrows other DB errors unchanged', async () => {
@@ -172,7 +219,7 @@ describe('AuthService', () => {
       });
 
       expect(jwtService.sign).not.toHaveBeenCalled();
-      expect(userCredRepository.update).not.toHaveBeenCalled();
+      expect(queryBuilder.execute).not.toHaveBeenCalled();
     });
   });
 
@@ -201,12 +248,23 @@ describe('AuthService', () => {
         relations: { credentials: true },
       });
       expect(jwtService.sign).toHaveBeenCalledWith({ sub: 'user-1' });
-      expect(userCredRepository.update).toHaveBeenCalledWith(
-        { userId: 'user-1' },
-        {
-          refreshTokenHash: sha256(result.refreshToken),
-          refreshExpiresAt: expect.any(Date),
-        },
+      expect(mockManager.createQueryBuilder).toHaveBeenCalled();
+      expect(queryBuilder.set).toHaveBeenCalledWith({
+        refreshTokenHash: sha256(result.refreshToken),
+        refreshExpiresAt: expect.any(Date),
+      });
+      expect(queryBuilder.where).toHaveBeenCalledWith({ userId: 'user-1' });
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith('"refreshTokenHash" = :oldRefreshToken', {
+        oldRefreshToken: sha256(dto.refreshToken),
+      });
+    });
+
+    it('throws UnauthorizedException when the token was rotated concurrently', async () => {
+      mockManager.findOne.mockResolvedValue(user);
+      queryBuilder.execute.mockResolvedValue({ affected: 0 });
+
+      await expect(service.refresh(dto)).rejects.toThrow(
+        new UnauthorizedException(AUTH_ERRORS.INVALID_REFRESH_TOKEN),
       );
     });
 
@@ -226,7 +284,7 @@ describe('AuthService', () => {
       );
 
       expect(jwtService.sign).not.toHaveBeenCalled();
-      expect(userCredRepository.update).not.toHaveBeenCalled();
+      expect(queryBuilder.execute).not.toHaveBeenCalled();
     });
   });
 
@@ -245,6 +303,7 @@ describe('AuthService', () => {
 
       expect(userCredRepository.findOne).toHaveBeenCalledWith({
         where: { refreshTokenHash: sha256(refreshToken) },
+        select: { userId: true, refreshTokenHash: true, refreshExpiresAt: true },
       });
       expect(userCredRepository.update).toHaveBeenCalledWith(
         { userId: 'user-1' },

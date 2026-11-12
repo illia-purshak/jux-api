@@ -18,4 +18,6 @@ export const AUTH_ERRORS = {
   INVALID_CREDENTIALS: 'Invalid name/email or password',
   USER_EXISTS: 'User with this name or email already exists',
   INVALID_REFRESH_TOKEN: 'Invalid or expired refresh token',
+  CREDENTIALS_NOT_FOUND: 'User credentials not found',
+  REGISTERED_BUT_LOGIN_FAILED: 'Registration successful, but failed to sign in',
 } as const;

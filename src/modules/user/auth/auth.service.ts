@@ -1,9 +1,9 @@
 import { UserCredentails } from '@entities/userCredentials.entity.js';
 import { User } from '@entities/users.entity.js';
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, MoreThanOrEqual, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, EntityManager, MoreThanOrEqual, QueryFailedError, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { LoginDto, RefreshTokenDto, RegisterDto, TokenResponseDto } from './dto/index.js';
 import { randomBytes } from 'crypto';
@@ -26,28 +26,37 @@ export class AuthService {
   async login(dto: LoginDto) {
     const { identifier, password } = dto;
 
-    const user = await this.userRepository.findOne({ where: [
-      { name: identifier },
-      { email: identifier.trim().toLowerCase() },
-    ], relations: { credentials: true },
+    return await this.dataSourse.transaction(async (manager) => {
+      const user = await manager.findOne(User, { where: [
+        { name: identifier },
+        { email: identifier.trim().toLowerCase() },
+      ],
+      relations: { credentials: true },
+      select: {
+        id: true,
+        credentials: {
+          passwordHash: true,
+        },
+      },
+      });
+
+      if (!user || !user.credentials || !user.credentials.passwordHash) throw new UnauthorizedException(AUTH_ERRORS.INVALID_CREDENTIALS);
+
+      const validPassword = await bcrypt.compare(password, user.credentials.passwordHash);
+
+      if (!validPassword) throw new UnauthorizedException(AUTH_ERRORS.INVALID_CREDENTIALS);
+
+      return await this.generateAuthTokens({ manager, user });
     });
-
-    if (!user || !user.credentials || !user.credentials.passwordHash) throw new UnauthorizedException(AUTH_ERRORS.INVALID_CREDENTIALS);
-
-    const validPassword = await bcrypt.compare(password, user.credentials.passwordHash);
-
-    if (!validPassword) throw new UnauthorizedException(AUTH_ERRORS.INVALID_CREDENTIALS);
-
-    const { refreshToken, accessToken } = await this.generateAuthTokens(user);
-
-    return { accessToken, refreshToken };
   }
 
   async register(dto: RegisterDto) {
     const { name, email, password } = dto;
 
+    let user: User;
+
     try {
-      const user = await this.dataSourse.transaction(async (manager) => {
+      user = await this.dataSourse.transaction(async (manager) => {
         const userExist = await manager.findOne(User, { where: [{ name }, { email }] });
 
         if (userExist) throw new ConflictException(AUTH_ERRORS.USER_EXISTS);
@@ -63,28 +72,30 @@ export class AuthService {
 
         return await manager.save(User, newUser);
       });
-
-      const { refreshToken, accessToken } = await this.generateAuthTokens(user);
-
-      return { refreshToken, accessToken };
     } catch (err) {
       if (err instanceof QueryFailedError && (err.driverError as { code?: string })?.code === '23505') {
         throw new ConflictException(AUTH_ERRORS.USER_EXISTS);
       }
       throw err;
     }
+
+    try {
+      return await this.generateAuthTokens({ user });
+    } catch (err) {
+      throw new InternalServerErrorException(AUTH_ERRORS.REGISTERED_BUT_LOGIN_FAILED, { cause: err });
+    }
   }
 
   async refresh(dto: RefreshTokenDto): Promise<TokenResponseDto> {
     if (!dto.refreshToken) throw new UnauthorizedException(AUTH_ERRORS.INVALID_REFRESH_TOKEN);
 
-    const token = sha256(dto.refreshToken);
+    const refreshTokenHash = sha256(dto.refreshToken);
 
-    const { accessToken, refreshToken } = await this.dataSourse.transaction(async (manager) => {
+    return await this.dataSourse.transaction(async (manager) => {
       const user = await manager.findOne(User, {
         where: {
           credentials: {
-            refreshTokenHash: token,
+            refreshTokenHash: refreshTokenHash,
             refreshExpiresAt: MoreThanOrEqual(new Date()),
           },
         }, relations: { credentials: true },
@@ -92,19 +103,26 @@ export class AuthService {
 
       if (!user) throw new UnauthorizedException(AUTH_ERRORS.INVALID_REFRESH_TOKEN);
 
-      const { accessToken, refreshToken } = await this.generateAuthTokens(user);
-
-      return { accessToken, refreshToken };
+      try {
+        return await this.generateAuthTokens({ manager, user, oldRefreshToken: refreshTokenHash });
+      } catch (err) {
+        if (err instanceof NotFoundException) throw new UnauthorizedException(AUTH_ERRORS.INVALID_REFRESH_TOKEN);
+        throw err;
+      }
     });
-
-    return { accessToken, refreshToken };
   };
 
   async logout(refreshToken?: string) {
     if (!refreshToken) return;
 
     const refreshTokenHash = sha256(refreshToken);
-    const token = await this.userCredRepository.findOne({ where: { refreshTokenHash } });
+    const token = await this.userCredRepository.findOne({
+      where: { refreshTokenHash },
+      select: {
+        userId: true,
+        refreshTokenHash: true,
+        refreshExpiresAt: true,
+      } });
 
     if (!token?.refreshTokenHash || !token.refreshExpiresAt) return;
 
@@ -117,10 +135,9 @@ export class AuthService {
     );
   };
 
-  private async generateAuthTokens(user: User): Promise<{
-    accessToken: string;
-    refreshToken: string;
-  }> {
+  private async generateAuthTokens(
+    { manager, user, oldRefreshToken }: { manager?: EntityManager; user: User; oldRefreshToken?: string },
+  ): Promise<TokenResponseDto> {
     const refreshToken = randomBytes(32).toString('base64url');
     const refreshTokenHash = sha256(refreshToken);
 
@@ -130,13 +147,25 @@ export class AuthService {
       sub: user.id,
     });
 
-    await this.userCredRepository.update(
-      { userId: user.id },
-      {
+    const source = manager ?? this.dataSourse.manager;
+
+    const queryBuilder = source.createQueryBuilder(UserCredentails, 'cred')
+      .update(UserCredentails)
+      .set({
         refreshTokenHash,
         refreshExpiresAt,
-      },
-    );
+      })
+      .where({ userId: user.id });
+
+    if (oldRefreshToken !== undefined)
+      queryBuilder.andWhere('"refreshTokenHash" = :oldRefreshToken', {
+        oldRefreshToken,
+      });
+
+    const result = await queryBuilder.execute();
+
+    if (result.affected !== 1)
+      throw new NotFoundException(AUTH_ERRORS.CREDENTIALS_NOT_FOUND);
 
     return {
       accessToken,

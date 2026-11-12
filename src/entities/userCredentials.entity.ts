@@ -1,19 +1,22 @@
-import { Column, Entity, Index, JoinColumn, OneToOne, PrimaryColumn, PrimaryGeneratedColumn, type Relation } from "typeorm";
+import { Column, Entity, Index, JoinColumn, OneToOne, PrimaryColumn, type Relation } from "typeorm";
 import { User } from "./users.entity.js";
+import { Exclude } from "class-transformer";
 
 @Entity('user_credentails')
 export class UserCredentails {
   @PrimaryColumn()
   public userId: number;
 
-  @Column({ nullable: true, length: 64, type: 'varchar' })
+  @Exclude({ toPlainOnly: true })
+  @Column({ nullable: true, length: 64, type: 'varchar', select: false })
   public passwordHash?: string;
 
   @Column({ nullable: true })
   public passUpdatedAt?: Date;
 
+  @Exclude({ toPlainOnly: true })
   @Index({ where: '"refreshTokenHash" IS NOT NULL' })
-  @Column({ nullable: true, type: 'varchar' })
+  @Column({ nullable: true, type: 'varchar', select: false })
   public refreshTokenHash: string | null;
 
   @Column({ nullable: true, type: 'timestamp' })
