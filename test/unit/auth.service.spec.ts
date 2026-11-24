@@ -6,8 +6,8 @@ import * as bcrypt from 'bcrypt';
 import { User } from '@entities/users.entity.js';
 import type { UserCredentails } from '@entities/userCredentials.entity.js';
 import { sha256 } from '@utils/hash.helper.js';
-import { AuthService } from './auth.service.js';
-import { AUTH_ERRORS, BCRYPT_SALT_ROUNDS } from './auth.constants.js';
+import { AuthService } from '@modules/user/auth/auth.service.js';
+import { AUTH_ERRORS, BCRYPT_SALT_ROUNDS } from '@modules/user/auth/auth.constants.js';
 
 vi.mock('bcrypt', () => ({
   compare: vi.fn(),

@@ -4,6 +4,7 @@ import { AccessTokenDto, LoginDto, RegisterDto } from './dto/index.js';
 import { REFRESH_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE_OPTIONS, REFRESH_TOKEN_TTL_MS } from './auth.constants.js';
 import type { Response } from 'express';
 import { CurrentUserId } from '@common/decorators/current-user.decorator.js';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
@@ -32,6 +33,7 @@ export class AuthController {
     return { accessToken };
   }
 
+  @SkipThrottle()
   @Post('register')
   async register(
     @Body() dto: RegisterDto,
@@ -54,6 +56,7 @@ export class AuthController {
     return { accessToken };
   }
 
+  @SkipThrottle()
   @Get('logout')
   async logout(
     @Res({ passthrough: true }) resp: Response,

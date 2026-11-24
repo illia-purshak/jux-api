@@ -5,7 +5,9 @@ import { Room } from '@entities/room.entity.js';
 import { ResponseListDto } from '@common/dto/meta.dto.js';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard.js';
 import { CurrentUserId } from '@common/decorators/index.js';
+import { SkipThrottle } from '@nestjs/throttler';
 
+@SkipThrottle()
 @Controller('room')
 export class RoomController {
   constructor(private readonly roomService: RoomService) {}

@@ -16,7 +16,7 @@ export class Room {
   @Column({ type: 'varchar', length: 255 })
   public name: string;
 
-  @Column({ enum: RoomAccessByEnum, default: 'public' })
+  @Column({ type: 'varchar', enum: RoomAccessByEnum, default: 'public' })
   public accessBy: RoomAccessByEnum;
 
   @UpdateDateColumn()
