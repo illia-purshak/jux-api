@@ -3,21 +3,20 @@ import { AuthService } from './auth.service.js';
 import { AccessTokenDto, LoginDto, RegisterDto } from './dto/index.js';
 import { REFRESH_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE_OPTIONS, REFRESH_TOKEN_TTL_MS } from './auth.constants.js';
 import type { Response } from 'express';
+import { CurrentUserId } from '@common/decorators/current-user.decorator.js';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('guest')
-  async loginAsGuest(
+  async guest(
     @Res({ passthrough: true }) resp: Response,
+    @CurrentUserId({ allowUndefined: true }) id?: number,
   ): Promise<AccessTokenDto> {
-    const { refreshToken, accessToken } = await this.authService.loginAsGuest();
+    const { refreshToken: newRefresh, accessToken } = await this.authService.guest(id);
 
-    resp.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
-      ...REFRESH_TOKEN_COOKIE_OPTIONS,
-      maxAge: REFRESH_TOKEN_TTL_MS,
-    });
+    this.setCookie(resp, newRefresh);
 
     return { accessToken };
   }
@@ -27,13 +26,9 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) resp: Response,
   ): Promise<AccessTokenDto> {
-    const { refreshToken, accessToken } = await this.authService.login(dto);
+    const { refreshToken: newRefresh, accessToken } = await this.authService.login(dto);
 
-    resp.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
-      ...REFRESH_TOKEN_COOKIE_OPTIONS,
-      maxAge: REFRESH_TOKEN_TTL_MS,
-    });
-
+    this.setCookie(resp, newRefresh);
     return { accessToken };
   }
 
@@ -42,13 +37,9 @@ export class AuthController {
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) resp: Response,
   ): Promise<AccessTokenDto> {
-    const { refreshToken, accessToken } = await this.authService.register(dto);
+    const { refreshToken: newRefresh, accessToken } = await this.authService.register(dto);
 
-    resp.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
-      ...REFRESH_TOKEN_COOKIE_OPTIONS,
-      maxAge: REFRESH_TOKEN_TTL_MS,
-    });
-
+    this.setCookie(resp, newRefresh);
     return { accessToken };
   }
 
@@ -59,11 +50,7 @@ export class AuthController {
   ): Promise<AccessTokenDto> {
     const { refreshToken: newRefresh, accessToken } = await this.authService.refresh({ refreshToken });
 
-    resp.cookie(REFRESH_TOKEN_COOKIE, newRefresh, {
-      ...REFRESH_TOKEN_COOKIE_OPTIONS,
-      maxAge: REFRESH_TOKEN_TTL_MS,
-    });
-
+    this.setCookie(resp, newRefresh);
     return { accessToken };
   }
 
@@ -77,5 +64,12 @@ export class AuthController {
     await this.authService.logout(refreshToken);
 
     return { message: 'Logout successful' };
+  }
+
+  private setCookie(resp: Response, newRefresh: string) {
+    resp.cookie(REFRESH_TOKEN_COOKIE, newRefresh, {
+      ...REFRESH_TOKEN_COOKIE_OPTIONS,
+      maxAge: REFRESH_TOKEN_TTL_MS,
+    });
   }
 }
