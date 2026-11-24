@@ -16,7 +16,7 @@ export class Room {
   @Column({ type: 'varchar', length: 255 })
   public name: string;
 
-  @Column({ enum: RoomAccessByEnum, default: 'public' })
+  @Column({ type: 'varchar', enum: RoomAccessByEnum, default: 'public' })
   public accessBy: RoomAccessByEnum;
 
   @UpdateDateColumn()
@@ -25,6 +25,6 @@ export class Room {
   @CreateDateColumn()
   public createdAt: Date;
 
-  @ManyToOne(() => User, (user) => user.id)
+  @ManyToOne(() => User, (user) => user.id, { onDelete: 'CASCADE' })
   user: Relation<User>;
 }

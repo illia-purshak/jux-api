@@ -14,16 +14,14 @@ import {
   DEFAULT_PORT,
   SWAGGER_PATH,
 } from "@constants/app.constants.js";
+import { NestExpressApplication } from "@nestjs/platform-express";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  // `.env` is loaded by ConfigModule (AppModule); wait for it before reading process.env.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   await ConfigModule.envVariablesLoaded;
   configureApp(app);
   const logger = new Logger("Bootstrap");
 
-  // Opt-in, so a server with a missing NODE_ENV doesn't expose the docs:
-  // SWAGGER_ENABLED=true|false wins; otherwise only NODE_ENV=development.
   const swaggerEnabled = process.env.SWAGGER_ENABLED
     ? process.env.SWAGGER_ENABLED === "true"
     : process.env.NODE_ENV === "development";
@@ -38,8 +36,11 @@ async function bootstrap() {
     );
   }
 
+  app.set('trust proxy', 'loopback');
+
   const port = Number(process.env.PORT ?? DEFAULT_PORT);
   await app.listen(port);
+
   const url = await app.getUrl();
   logger.log(`Application is running on ${url}/${API_PREFIX}`);
   if (swaggerEnabled) logger.log(`Swagger UI: ${url}/${SWAGGER_PATH}`);

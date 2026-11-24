@@ -41,6 +41,8 @@ services:
         condition: service_healthy
     volumes:
       - pgadmin_data:/var/lib/pgadmin
+      # Pre-registered server; read only on pgAdmin's first start (empty pgadmin_data).
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro,z
     ports:
       - "${PGADMIN_PORT:-8083}:80"
     networks:

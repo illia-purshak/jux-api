@@ -3,7 +3,7 @@ import { User } from '@entities/users.entity.js';
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, MoreThanOrEqual, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, MoreThanOrEqual, QueryFailedError, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { LoginDto, RefreshTokenDto, RegisterDto, TokenResponseDto } from './dto/index.js';
 import { randomBytes } from 'crypto';
@@ -23,7 +23,24 @@ export class AuthService {
 
   ) {}
 
-  async login(dto: LoginDto) {
+  async guest(id?: number): Promise<TokenResponseDto> {
+    return await this.dataSourse.transaction(async (manager) => {
+      if (!id) return this.createGuest(manager);
+
+      const guest = await manager.findOne(User, { where: { id, name: IsNull(), email: IsNull() } });
+
+      if (!guest) return this.createGuest(manager);
+
+      return this.generateAuthTokens({ manager, user: guest });
+    });
+  }
+
+  async createGuest(manager: EntityManager): Promise<TokenResponseDto> {
+    const guest = await manager.save(manager.create(User, { credentials: {} }));
+    return this.generateAuthTokens({ manager, user: guest });
+  }
+
+  async login(dto: LoginDto): Promise<TokenResponseDto> {
     const { identifier, password } = dto;
 
     return await this.dataSourse.transaction(async (manager) => {
@@ -50,7 +67,7 @@ export class AuthService {
     });
   }
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto): Promise<TokenResponseDto> {
     const { name, email, password } = dto;
 
     let user: User;
