@@ -8,6 +8,20 @@ import type { Response } from 'express';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Post('guest')
+  async loginAsGuest(
+    @Res({ passthrough: true }) resp: Response,
+  ): Promise<AccessTokenDto> {
+    const { refreshToken, accessToken } = await this.authService.loginAsGuest();
+
+    resp.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
+      ...REFRESH_TOKEN_COOKIE_OPTIONS,
+      maxAge: REFRESH_TOKEN_TTL_MS,
+    });
+
+    return { accessToken };
+  }
+
   @Post('login')
   async login(
     @Body() dto: LoginDto,

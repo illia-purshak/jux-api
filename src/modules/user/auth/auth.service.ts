@@ -23,6 +23,14 @@ export class AuthService {
 
   ) {}
 
+  async loginAsGuest() {
+    return await this.dataSourse.transaction(async (manager) => {
+      const guest = await manager.save(manager.create(User, { credentials: {} }));
+
+      return this.generateAuthTokens({ manager, user: guest });
+    });
+  }
+
   async login(dto: LoginDto) {
     const { identifier, password } = dto;
 

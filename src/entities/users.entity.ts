@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn, type Relation, Unique, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, OneToMany, OneToOne, PrimaryGeneratedColumn, type Relation, UpdateDateColumn } from "typeorm";
 import { UserCredentails } from "./userCredentials.entity.js";
 import { Room } from "./room.entity.js";
 
@@ -12,6 +12,13 @@ export class User {
 
   @Column({ nullable: true, unique: true })
   public email?: string;
+
+  @Column({
+    type: 'boolean',
+    asExpression: '"name" IS NULL AND "email" IS NULL',
+    generatedType: 'STORED',
+  })
+  public readonly isGuest: boolean;
 
   @UpdateDateColumn()
   public updatedAt: Date;
