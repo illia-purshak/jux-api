@@ -9,12 +9,11 @@ import { REFRESH_TOKEN_COOKIE } from "@modules/user/auth/auth.constants.js";
 
 export const PASSWORD = "Passw0rdOk";
 
-/** Fresh app per test (also resets the in-memory throttler) on an emptied test DB. */
 export async function createApp(): Promise<INestApplication<App>> {
   const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = configureApp(moduleFixture.createNestApplication<INestApplication<App>>());
   await app.init();
-  await app.get(DataSource).query(`TRUNCATE "room", "user_credentails", "user" RESTART IDENTITY CASCADE`);
+  await app.get(DataSource).query(`TRUNCATE "room", "user_credentials", "user" RESTART IDENTITY CASCADE`);
   return app;
 }
 

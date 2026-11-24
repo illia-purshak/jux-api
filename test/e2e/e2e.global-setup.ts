@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 import { Client } from "pg";
+import { Room } from "@entities/room.entity.js";
+import { UserCredentails } from "@entities/userCredentials.entity.js";
+import { User } from "@entities/users.entity.js";
 import { DataSource, type MigrationInterface } from "typeorm";
 
 export default async function setup() {
@@ -28,6 +31,8 @@ export default async function setup() {
     username: POSTGRES_USER,
     password: POSTGRES_PASSWORD,
     database: POSTGRES_DATABASE,
+    // entities make runMigrations create typeorm_metadata (needed by the isGuest generated column)
+    entities: [User, UserCredentails, Room],
     migrations,
   });
   await dataSource.initialize();
