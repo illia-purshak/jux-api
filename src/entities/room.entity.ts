@@ -25,6 +25,6 @@ export class Room {
   @CreateDateColumn()
   public createdAt: Date;
 
-  @ManyToOne(() => User, (user) => user.id)
+  @ManyToOne(() => User, (user) => user.id, { onDelete: 'CASCADE' })
   user: Relation<User>;
 }

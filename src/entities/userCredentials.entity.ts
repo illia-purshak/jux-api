@@ -2,7 +2,7 @@ import { Column, Entity, Index, JoinColumn, OneToOne, PrimaryColumn, type Relati
 import { User } from "./users.entity.js";
 import { Exclude } from "class-transformer";
 
-@Entity('user_credentails')
+@Entity('user_credentials')
 export class UserCredentails {
   @PrimaryColumn()
   public userId: number;
@@ -22,7 +22,7 @@ export class UserCredentails {
   @Column({ nullable: true, type: 'timestamp' })
   public refreshExpiresAt: Date | null;
 
-  @OneToOne(() => User, (user) => user.credentials)
+  @OneToOne(() => User, (user) => user.credentials, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: Relation<User>;
 }
