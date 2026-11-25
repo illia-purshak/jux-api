@@ -1,15 +1,17 @@
-import { Body, Controller, Cookies, Get, Post, Res } from '@nestjs/common';
+import { Body, Controller, Cookies, Get, Post, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 import { AccessTokenDto, LoginDto, RegisterDto } from './dto/index.js';
 import { REFRESH_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE_OPTIONS, REFRESH_TOKEN_TTL_MS } from './auth.constants.js';
 import type { Response } from 'express';
 import { CurrentUserId } from '@common/decorators/current-user.decorator.js';
 import { SkipThrottle } from '@nestjs/throttler';
+import { OptionalJwtAuthGuard } from '@common/guards/jwt-auth.guard.js';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Post('guest')
   async guest(
     @Res({ passthrough: true }) resp: Response,

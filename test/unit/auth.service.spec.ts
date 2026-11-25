@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictException, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
-import { QueryFailedError, type DataSource, type EntityManager, type Repository } from 'typeorm';
+import { IsNull, QueryFailedError, type DataSource, type EntityManager, type Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '@entities/users.entity.js';
 import type { UserCredentails } from '@entities/userCredentials.entity.js';
@@ -56,6 +56,68 @@ describe('AuthService', () => {
       userCredRepository as unknown as Repository<UserCredentails>,
       dataSource as unknown as DataSource,
     );
+  });
+
+  describe('guest', () => {
+    const id = 1;
+    const user = { id: 1, name: null, email: null };
+    const newGuest = { credentials: {} };
+
+    it('creates new guest and returns tokens when id is not passed', async () => {
+      mockManager.create.mockReturnValue(newGuest);
+      mockManager.save.mockResolvedValue(user);
+      jwtService.sign.mockReturnValue('access-token');
+
+      const result = await service.guest();
+
+      expect(result).toEqual({
+        accessToken: 'access-token',
+        refreshToken: expect.any(String),
+      });
+      expect(mockManager.findOne).not.toHaveBeenCalled();
+      expect(mockManager.create).toHaveBeenCalledWith(User, { credentials: {} });
+      expect(mockManager.save).toHaveBeenCalledWith(newGuest);
+      expect(jwtService.sign).toHaveBeenCalledWith({ sub: 1 });
+      expect(queryBuilder.where).toHaveBeenCalledWith({ userId: 1 });
+    });
+
+    it('returns tokens to existing guest', async () => {
+      mockManager.findOne.mockResolvedValue(user);
+      jwtService.sign.mockReturnValue('access-token');
+
+      const result = await service.guest(id);
+
+      expect(result).toEqual({
+        accessToken: 'access-token',
+        refreshToken: expect.any(String),
+      });
+      expect(mockManager.findOne).toHaveBeenCalledWith(User, {
+        where: { id, name: IsNull(), email: IsNull() },
+      });
+      expect(mockManager.create).not.toHaveBeenCalled();
+      expect(mockManager.save).not.toHaveBeenCalled();
+      expect(jwtService.sign).toHaveBeenCalledWith({ sub: 1 });
+    });
+
+    it('creates new guest when guest with passed id is not found', async () => {
+      mockManager.findOne.mockResolvedValue(null);
+      mockManager.create.mockReturnValue(newGuest);
+      mockManager.save.mockResolvedValue(user);
+      jwtService.sign.mockReturnValue('access-token');
+
+      const result = await service.guest(id);
+
+      expect(result).toEqual({
+        accessToken: 'access-token',
+        refreshToken: expect.any(String),
+      });
+      expect(mockManager.findOne).toHaveBeenCalledWith(User, {
+        where: { id, name: IsNull(), email: IsNull() },
+      });
+      expect(mockManager.create).toHaveBeenCalledWith(User, { credentials: {} });
+      expect(mockManager.save).toHaveBeenCalledWith(newGuest);
+      expect(jwtService.sign).toHaveBeenCalledWith({ sub: 1 });
+    });
   });
 
   describe('login', () => {

@@ -67,4 +67,12 @@ describe("Auth (e2e)", () => {
 
     expect(wrongPassword.body).toEqual(unknownEmail.body);
   });
+
+  it("guest is rate limited: 11th request in a minute -> 429", async () => {
+    for (let i = 0; i < 10; i++) {
+      await http().post("/api/v1/auth/guest").expect(201);
+    }
+
+    await http().post("/api/v1/auth/guest").expect(429);
+  });
 });

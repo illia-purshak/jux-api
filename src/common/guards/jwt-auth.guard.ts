@@ -39,3 +39,12 @@ export class JwtAuthGuard implements CanActivate {
     return true;
   }
 }
+
+@Injectable()
+export class OptionalJwtAuthGuard extends JwtAuthGuard {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    if (request.headers['authorization'] === undefined) return true;
+    return super.canActivate(context);
+  }
+}
