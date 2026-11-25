@@ -1,5 +1,5 @@
 import { JwtService, TokenExpiredError } from "@nestjs/jwt";
-import { JwtAuthGuard } from "@common/guards/jwt-auth.guard.js";
+import { JwtAuthGuard, OptionalJwtAuthGuard } from "@common/guards/jwt-auth.guard.js";
 import { ConfigService } from "@nestjs/config";
 import { ExecutionContext, UnauthorizedException } from "@nestjs/common";
 import { AUTH_ERRORS } from "@modules/user/auth/auth.constants.js";
@@ -109,5 +109,41 @@ describe('JwtAuthGuard', () => {
     for (const body of bodies) {
       expect(body).toEqual({ message: 'Unauthorized', statusCode: 401 });
     }
+  });
+});
+
+describe('OptionalJwtAuthGuard', () => {
+  const jwtService = { verify: vi.fn() };
+  const configService = { getOrThrow: vi.fn().mockReturnValue('test-secret') };
+  const guard = new OptionalJwtAuthGuard(
+    jwtService as unknown as JwtService,
+    configService as unknown as ConfigService,
+  );
+  const contextWith = (request: { headers: Record<string, string>; user?: unknown }) =>
+    ({ switchToHttp: () => ({ getRequest: () => request }) }) as unknown as ExecutionContext;
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('lets anonymous request through without user', () => {
+    const request: { headers: Record<string, string>; user?: unknown } = { headers: {} };
+
+    expect(guard.canActivate(contextWith(request))).toBe(true);
+    expect(request.user).toBeUndefined();
+    expect(jwtService.verify).not.toHaveBeenCalled();
+  });
+
+  it('still verifies a present token', () => {
+    jwtService.verify.mockReturnValue({ sub: 7 });
+    const request: { headers: Record<string, string>; user?: unknown } = {
+      headers: { authorization: 'Bearer abc' },
+    };
+
+    expect(guard.canActivate(contextWith(request))).toBe(true);
+    expect(request.user).toEqual({ sub: 7 });
+
+    jwtService.verify.mockImplementation(() => {
+      throw new Error('bad');
+    });
+    expect(() => guard.canActivate(contextWith(request))).toThrow(UnauthorizedException);
   });
 });

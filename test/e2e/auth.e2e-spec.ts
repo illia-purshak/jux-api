@@ -67,4 +67,48 @@ describe("Auth (e2e)", () => {
 
     expect(wrongPassword.body).toEqual(unknownEmail.body);
   });
+
+  it("upgrade: guest -> registered user, can log in, second upgrade -> 409", async () => {
+    const guest = await http().post("/api/v1/auth/guest").expect(201);
+    const auth = `Bearer ${guest.body.accessToken as string}`;
+    const dto = { name: "alice", email: "alice@test.dev", password: PASSWORD };
+
+    const upgraded = await http().post("/api/v1/auth/upgrade").set("Authorization", auth).send(dto).expect(201);
+    expect(upgraded.body.accessToken).toEqual(expect.any(String));
+    refreshCookie(upgraded);
+    expectNoSecrets(upgraded);
+
+    await http()
+      .post("/api/v1/auth/login")
+      .send({ identifier: "alice@test.dev", password: PASSWORD })
+      .expect(201);
+
+    await http().post("/api/v1/auth/upgrade").set("Authorization", auth).send(dto).expect(409);
+  });
+
+  it("upgrade with a taken email -> 409", async () => {
+    await register(app, "alice", "same@test.dev").expect(201);
+    const guest = await http().post("/api/v1/auth/guest").expect(201);
+
+    await http()
+      .post("/api/v1/auth/upgrade")
+      .set("Authorization", `Bearer ${guest.body.accessToken as string}`)
+      .send({ name: "bob", email: "same@test.dev", password: PASSWORD })
+      .expect(409);
+  });
+
+  it("upgrade without token -> 401", async () => {
+    await http()
+      .post("/api/v1/auth/upgrade")
+      .send({ name: "alice", email: "alice@test.dev", password: PASSWORD })
+      .expect(401);
+  });
+
+  it("guest is rate limited: 11th request in a minute -> 429", async () => {
+    for (let i = 0; i < 10; i++) {
+      await http().post("/api/v1/auth/guest").expect(201);
+    }
+
+    await http().post("/api/v1/auth/guest").expect(429);
+  });
 });

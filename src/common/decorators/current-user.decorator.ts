@@ -10,12 +10,10 @@ export const CurrentUserId = createParamDecorator((
   context: ExecutionContext,
 ): number | undefined => {
   const request = context.switchToHttp().getRequest<{ user?: JwtPayloadDto }>();
-
   const userId = request.user?.sub;
 
   if (userId === undefined && !options?.allowUndefined)
     throw new UnauthorizedException();
 
   return userId;
-},
-);
+});
