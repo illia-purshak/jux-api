@@ -18,6 +18,7 @@ const isInDevMode = process.env.NODE_ENV === 'development';
 export const AUTH_ERRORS = {
   INVALID_CREDENTIALS: 'Invalid name/email or password',
   USER_EXISTS: 'User with this name or email already exists',
+  ALREADY_REGISTERED: 'User is already registered',
   INVALID_REFRESH_TOKEN: isInDevMode && 'Invalid or expired refresh token',
   CREDENTIALS_NOT_FOUND: 'User credentials not found',
   REGISTERED_BUT_LOGIN_FAILED: 'Registration successful, but failed to sign in',

@@ -5,7 +5,7 @@ import { REFRESH_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE_OPTIONS, REFRESH_TOKEN_TTL_M
 import type { Response } from 'express';
 import { CurrentUserId } from '@common/decorators/current-user.decorator.js';
 import { SkipThrottle } from '@nestjs/throttler';
-import { OptionalJwtAuthGuard } from '@common/guards/jwt-auth.guard.js';
+import { JwtAuthGuard, OptionalJwtAuthGuard } from '@common/guards/jwt-auth.guard.js';
 
 @Controller('auth')
 export class AuthController {
@@ -18,6 +18,20 @@ export class AuthController {
     @CurrentUserId({ allowUndefined: true }) id?: number,
   ): Promise<AccessTokenDto> {
     const { refreshToken: newRefresh, accessToken } = await this.authService.guest(id);
+
+    this.setCookie(resp, newRefresh);
+
+    return { accessToken };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('upgrade')
+  async upgrade(
+    @Body() dto: RegisterDto,
+    @CurrentUserId() id: number,
+    @Res({ passthrough: true }) resp: Response,
+  ): Promise<AccessTokenDto> {
+    const { refreshToken: newRefresh, accessToken } = await this.authService.upgrade(id, dto);
 
     this.setCookie(resp, newRefresh);
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictException, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
-import { IsNull, QueryFailedError, type DataSource, type EntityManager, type Repository } from 'typeorm';
+import { QueryFailedError, type DataSource, type EntityManager, type Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '@entities/users.entity.js';
 import type { UserCredentails } from '@entities/userCredentials.entity.js';
@@ -32,6 +32,7 @@ describe('AuthService', () => {
   const mockManager = {
     findOne: vi.fn(),
     create: vi.fn(),
+    merge: vi.fn(),
     save: vi.fn(),
     createQueryBuilder: vi.fn(() => queryBuilder),
   };
@@ -92,7 +93,7 @@ describe('AuthService', () => {
         refreshToken: expect.any(String),
       });
       expect(mockManager.findOne).toHaveBeenCalledWith(User, {
-        where: { id, name: IsNull(), email: IsNull() },
+        where: { id, isGuest: true },
       });
       expect(mockManager.create).not.toHaveBeenCalled();
       expect(mockManager.save).not.toHaveBeenCalled();
@@ -112,11 +113,94 @@ describe('AuthService', () => {
         refreshToken: expect.any(String),
       });
       expect(mockManager.findOne).toHaveBeenCalledWith(User, {
-        where: { id, name: IsNull(), email: IsNull() },
+        where: { id, isGuest: true },
       });
       expect(mockManager.create).toHaveBeenCalledWith(User, { credentials: {} });
       expect(mockManager.save).toHaveBeenCalledWith(newGuest);
       expect(jwtService.sign).toHaveBeenCalledWith({ sub: 1 });
+    });
+  });
+
+  describe('upgrade', () => {
+    const id = 1;
+    const dto = { name: 'john', email: 'example@mail.com', password: 'Sob132Ad' };
+    const guest = { id: 1, credentials: {} };
+    const merged = { id: 1, name: 'john', email: 'example@mail.com', credentials: { passwordHash: 'hashed' } };
+
+    it('fills guest with name, email, password and returns tokens', async () => {
+      mockManager.findOne.mockResolvedValue(guest);
+      vi.mocked(bcrypt.hash).mockResolvedValue('hashed' as never);
+      mockManager.merge.mockReturnValue(merged);
+      mockManager.save.mockResolvedValue(merged);
+      jwtService.sign.mockReturnValue('access-token');
+
+      const result = await service.upgrade(id, dto);
+
+      expect(result).toEqual({
+        accessToken: 'access-token',
+        refreshToken: expect.any(String),
+      });
+      expect(mockManager.findOne).toHaveBeenCalledWith(User, {
+        where: { id, isGuest: true },
+        relations: { credentials: true },
+      });
+      expect(bcrypt.hash).toHaveBeenCalledWith('Sob132Ad', BCRYPT_SALT_ROUNDS);
+      expect(mockManager.merge).toHaveBeenCalledWith(User, guest, {
+        name: 'john',
+        email: 'example@mail.com',
+        credentials: { passwordHash: 'hashed' },
+      });
+      expect(mockManager.save).toHaveBeenCalledWith(merged);
+      expect(jwtService.sign).toHaveBeenCalledWith({ sub: 1 });
+      expect(queryBuilder.where).toHaveBeenCalledWith({ userId: 1 });
+    });
+
+    it('throws ConflictException when user is not a guest', async () => {
+      mockManager.findOne.mockResolvedValue(null);
+
+      await expect(service.upgrade(id, dto)).rejects.toThrow(
+        new ConflictException(AUTH_ERRORS.ALREADY_REGISTERED),
+      );
+      expect(bcrypt.hash).not.toHaveBeenCalled();
+      expect(mockManager.save).not.toHaveBeenCalled();
+      expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when name or email is taken (unique violation)', async () => {
+      mockManager.findOne.mockResolvedValue(guest);
+      vi.mocked(bcrypt.hash).mockResolvedValue('hashed' as never);
+      mockManager.merge.mockReturnValue(merged);
+      mockManager.save.mockRejectedValue(
+        new QueryFailedError('UPDATE ...', [], Object.assign(new Error('duplicate key'), { code: '23505' })),
+      );
+
+      await expect(service.upgrade(id, dto)).rejects.toThrow(
+        new ConflictException(AUTH_ERRORS.USER_EXISTS),
+      );
+      expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+
+    it('rethrows other DB errors unchanged', async () => {
+      const otherDbError = new QueryFailedError('UPDATE ...', [], Object.assign(new Error('any error'), { code: '11111' }));
+      mockManager.findOne.mockResolvedValue(guest);
+      vi.mocked(bcrypt.hash).mockResolvedValue('hashed' as never);
+      mockManager.merge.mockReturnValue(merged);
+      mockManager.save.mockRejectedValue(otherDbError);
+
+      await expect(service.upgrade(id, dto)).rejects.toBe(otherDbError);
+    });
+
+    it('throws InternalServerErrorException when upgraded but tokens are not saved', async () => {
+      mockManager.findOne.mockResolvedValue(guest);
+      vi.mocked(bcrypt.hash).mockResolvedValue('hashed' as never);
+      mockManager.merge.mockReturnValue(merged);
+      mockManager.save.mockResolvedValue(merged);
+      queryBuilder.execute.mockRejectedValue(new Error('connection lost'));
+
+      const error = await service.upgrade(id, dto).catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(InternalServerErrorException);
+      expect((error as InternalServerErrorException).message).toBe(AUTH_ERRORS.REGISTERED_BUT_LOGIN_FAILED);
     });
   });
 

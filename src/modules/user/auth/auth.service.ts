@@ -3,7 +3,7 @@ import { User } from '@entities/users.entity.js';
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, IsNull, MoreThanOrEqual, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, EntityManager, MoreThanOrEqual, QueryFailedError, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { LoginDto, RefreshTokenDto, RegisterDto, TokenResponseDto } from './dto/index.js';
 import { randomBytes } from 'crypto';
@@ -27,7 +27,7 @@ export class AuthService {
     return await this.dataSourse.transaction(async (manager) => {
       if (!id) return this.createGuest(manager);
 
-      const guest = await manager.findOne(User, { where: { id, name: IsNull(), email: IsNull() } });
+      const guest = await manager.findOne(User, { where: { id, isGuest: true } });
 
       if (!guest) return this.createGuest(manager);
 
@@ -35,9 +35,33 @@ export class AuthService {
     });
   }
 
-  async createGuest(manager: EntityManager): Promise<TokenResponseDto> {
-    const guest = await manager.save(manager.create(User, { credentials: {} }));
-    return this.generateAuthTokens({ manager, user: guest });
+  async upgrade(id: number, dto: RegisterDto): Promise<TokenResponseDto> {
+    const { name, email, password } = dto;
+
+    const user = await this.withUniqueConflict(() =>
+      this.dataSourse.transaction(async (manager) => {
+        const user = await manager.findOne(User, {
+          where: { id, isGuest: true },
+          relations: { credentials: true },
+        });
+
+        if (!user) throw new ConflictException(AUTH_ERRORS.ALREADY_REGISTERED);
+
+        const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+
+        return await manager.save(
+          manager.merge(User, user, {
+            name, email, credentials: { passwordHash },
+          }),
+        );
+      }),
+    );
+
+    try {
+      return await this.generateAuthTokens({ user });
+    } catch (err) {
+      throw new InternalServerErrorException(AUTH_ERRORS.REGISTERED_BUT_LOGIN_FAILED, { cause: err });
+    }
   }
 
   async login(dto: LoginDto): Promise<TokenResponseDto> {
@@ -70,10 +94,8 @@ export class AuthService {
   async register(dto: RegisterDto): Promise<TokenResponseDto> {
     const { name, email, password } = dto;
 
-    let user: User;
-
-    try {
-      user = await this.dataSourse.transaction(async (manager) => {
+    const user = await this.withUniqueConflict(() =>
+      this.dataSourse.transaction(async (manager) => {
         const userExist = await manager.findOne(User, { where: [{ name }, { email }] });
 
         if (userExist) throw new ConflictException(AUTH_ERRORS.USER_EXISTS);
@@ -88,13 +110,8 @@ export class AuthService {
           } });
 
         return await manager.save(User, newUser);
-      });
-    } catch (err) {
-      if (err instanceof QueryFailedError && (err.driverError as { code?: string })?.code === '23505') {
-        throw new ConflictException(AUTH_ERRORS.USER_EXISTS);
-      }
-      throw err;
-    }
+      }),
+    );
 
     try {
       return await this.generateAuthTokens({ user });
@@ -188,5 +205,21 @@ export class AuthService {
       accessToken,
       refreshToken,
     };
+  }
+
+  private async withUniqueConflict<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (err) {
+      if (err instanceof QueryFailedError && (err.driverError as { code?: string })?.code === '23505') {
+        throw new ConflictException(AUTH_ERRORS.USER_EXISTS);
+      }
+      throw err;
+    }
+  }
+
+  private async createGuest(manager: EntityManager): Promise<TokenResponseDto> {
+    const guest = await manager.save(manager.create(User, { credentials: {} }));
+    return this.generateAuthTokens({ manager, user: guest });
   }
 }
